@@ -5,6 +5,8 @@
  *
  */
 
+//实现了两种类型的屏障（barrier）：感知屏障（sense barrier）和基于休眠的屏障
+
 #include "sbarrier.h"
 #include <sys/types.h>
 #include <sys/stat.h>

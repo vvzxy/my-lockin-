@@ -1,38 +1,7 @@
-/*
- * File: glk.c
- * Authors: Jelena Antic <jelena.antic@epfl.ch>
- *          Georgios Chatzopoulos <georgios.chatzopoulos@epfl.ch>
- *          Vasileios Trigonakis <vasileios.trigonakis@epfl.ch>
- *
- * Description:
- *     The Generic Lock (GLK) algorithm implementation.
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2016 Jelena Antic, Georgios Chatzopoulos, Vasileios Trigonakis
- *	      	     Distributed Programming Lab (LPD), EPFL
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
-
 #include "glk.h"
 #include <sys/time.h>
 #include <string.h>
+//各种锁的加锁解锁操作
 
 // Background task for multiprogramming detection
 static volatile ALIGNED(CACHE_LINE_SIZE) int multiprogramming = 0;
@@ -460,8 +429,8 @@ glk_lock(glk_t* lock)
   int ret = 0;
   do
     {
-      const int current_lock_type = lock->lock_type;
-      glk_thread_cache_set(lock, current_lock_type);
+      const int current_lock_type = lock->lock_type;// 获取当前锁的类型
+      glk_thread_cache_set(lock, current_lock_type);// 设置线程缓存，表示该线程正在使用该锁
       switch(current_lock_type)
 	{
 	case TICKET_LOCK:
@@ -544,23 +513,25 @@ glk_mcs_lock_init(glk_mcs_lock_t* lock, pthread_mutexattr_t* a)
 {
   lock->next = NULL;
   return 0;
-}
+}//初始化，将锁的 next 字段设为 NULL，表示当前锁没有线程在等待。这是锁的初始状态，后续线程会通过将自己添加到 next 中加入队列
 
+//每个线程都有一个自己的本地锁状态，通过 glk_mcs_get_local_lock 函数，线程可以获取自己专属的锁节点，并将其加入到 MCS 锁队列中
 inline glk_mcs_lock_t*
-glk_mcs_get_local_lock(glk_mcs_lock_t* head)
-{
+glk_mcs_get_local_lock(glk_mcs_lock_t* head)//获取局部线程的锁,返回值是一个局部锁
+{//参数是线程要加入的锁队列的头部
   int i;
-  glk_mcs_lock_local_t *local = (glk_mcs_lock_local_t*) &__glk_mcs_local;
-  for (i = 0; i <= GLK_MCS_NESTED_LOCKS_MAX; i++)
+  glk_mcs_lock_local_t *local = (glk_mcs_lock_local_t*) &__glk_mcs_local;//获取当前线程的本地锁状态数据
+  //通过这个指针，线程可以访问自己的锁数组和头部指针数组。
+  for (i = 0; i <= GLK_MCS_NESTED_LOCKS_MAX; i++)//线程检查自己持有的锁，找到一个空闲位置来存储当前锁的头部指针
     {
       if (local->head[i] == NULL)
-	{
-	  local->head[i] = head;
-	  return &local->lock[i];
-	}
+            {
+              local->head[i] = head; //将传入的锁队列头指针 head 存储在当前线程的 head 数组的空闲位置 i。这表示该线程已经参与到锁队列中了。
 
+              return &local->lock[i];//返回当前线程的 lock[i]，这是线程自己在锁队列中的节点，用于表示该线程的等待状态。
+            }
     }
-  return NULL;
+  return NULL;//如果遍历了整个 local->head 数组都没有找到空闲的位置，则返回 NULL，表示当前线程已经无法再嵌套获取新的锁。
 }
 
 inline glk_mcs_lock_t*
@@ -570,11 +541,11 @@ glk_mcs_get_local_unlock(glk_mcs_lock_t* head)
   glk_mcs_lock_local_t *local = (glk_mcs_lock_local_t*) &__glk_mcs_local;
   for (i = 0; i <= GLK_MCS_NESTED_LOCKS_MAX; i++)
     {
-      if (local->head[i] == head)
-	{
-	  local->head[i] = NULL;
-	  return &local->lock[i];
-	}
+      if (local->head[i] == head)//找到对应锁
+          {
+            local->head[i] = NULL;
+            return &local->lock[i];//将当前锁的位置设置为 NULL，表示当前线程不再参与这个锁队列。此操作相当于从线程的锁头指针数组中移除了该锁，意味着线程释放了这个锁。
+          }
     }
   return NULL;
 }
@@ -582,42 +553,47 @@ glk_mcs_get_local_unlock(glk_mcs_lock_t* head)
 
 inline glk_mcs_lock_t*
 glk_mcs_get_local_nochange(glk_mcs_lock_t* head)
+// /查找与给定锁队列头指针 head 相对应的局部锁节点，但不改变线程本地的锁状态。
 {
   int i;
   glk_mcs_lock_local_t *local = (glk_mcs_lock_local_t*) &__glk_mcs_local;
   for (i = 0; i <= GLK_MCS_NESTED_LOCKS_MAX; i++)
     {
       if (local->head[i] == head)
-	{
-	  return &local->lock[i];
-	}
+        {
+          return &local->lock[i];
+          //找到与 head 匹配的锁后，返回 local->lock[i]，它是该线程在锁队列中的锁节点。这个锁节点可以表示当前线程的锁状态，用于进一步的锁操作（如查询队列中后续节点的状态）。
+        }
     }
   return NULL;
 }
 
 static inline int
-gls_adaptinve_mcs_lock_queue_length(glk_mcs_lock_t* lock)
-{
-  int res = 1;
+gls_adaptinve_mcs_lock_queue_length(glk_mcs_lock_t* lock)//计算 MCS 锁队列的长度
+{ 
+  int res = 1;//至少有一个节点，即当前节点
   glk_mcs_lock_t *curr = glk_mcs_get_local_nochange(lock)->next;
+  //调用这个函数，获取当前线程的 MCS 锁节点。这个函数通过 lock 查找当前线程在锁队列中的局部锁节点。
   while (curr != NULL)
     {
       curr = curr->next;
       res++;
     }
-  return res;
+  return res;//当前线程后面有多少个线程等待获取锁
 }
 
 static int
 glk_mcs_lock_lock(glk_t* gl) 
+//每个线程在等待锁时都会在自己的节点上自旋，而不是像其他自旋锁那样在全局锁上自旋。
 {
   glk_mcs_lock_t* lock = &gl->mcs_lock;
-  volatile glk_mcs_lock_t* local = glk_mcs_get_local_lock(lock);
-  local->next = NULL;
+  volatile glk_mcs_lock_t* local = glk_mcs_get_local_lock(lock);//为当前线程获取一个局部锁节点（MCS 锁的每个线程都有自己独立的锁节点）。
+  local->next = NULL;//将当前线程的锁节点 local 的 next 指针设为 NULL，表示当前节点还没有后继节点。
   
-  glk_mcs_lock_t* pred = swap_ptr((void*) &lock->next, (void*) local);
+  glk_mcs_lock_t* pred = swap_ptr((void*) &lock->next, (void*) local);//全局锁队列中的尾节点指针 lock->next 替换为当前线程的锁节点 local，并返回之前的尾节点（pred）。
 #if GLK_DO_ADAP == 1
   const int num_acq = __sync_add_and_fetch(&gl->num_acquired, 1);
+  //这是一个条件编译选项，用于控制锁的适应性（adaptive behavior）。如果开启，则 num_acq 会记录已经获取锁的次数，否则它始终为 0。
 #else
   const int num_acq = 0;
 #endif
@@ -626,51 +602,56 @@ glk_mcs_lock_lock(glk_t* gl)
   if (pred == NULL)  		/* lock was free */
     {
       return num_acq;
-    }
+    }//如果前一个锁节点为空，表示锁是空闲的，当前线程可以直接获取锁。
   local->waiting = 1; // word on which to spin
+  //设置当前节点的 waiting 字段为 1，表示当前节点正在等待。
   pred->next = local; // make pred point to me 
-
+  //设置当前节点的 waiting 字段为 1，表示当前节点正在等待。
   size_t n_spins = 0;
-  while (local->waiting != 0) 
+  while (local->waiting != 0) //当前线程会在自己的节点上自旋，直到 local->waiting 被前驱线程设置为 0，表示可以获取锁。
     {
       if (unlikely((n_spins++ == 1024) && gls_is_multiprogramming()))
+      //如果自旋超过 1024 次，且系统处于多任务状态（gls_is_multiprogramming() 返回 true），则调用 pthread_yield() 将当前线程的 CPU 时间片让出，防止过多的自旋消耗 CPU。
 	{
 	  n_spins = 0;
 	  pthread_yield();
 	}
       PAUSE_IN();
     }
-  return num_acq;
+  return num_acq;//自旋结束后，表示当前线程已经成功获取锁，返回 num_acq。
 }
 
 inline int
-glk_mcs_lock_trylock(glk_mcs_lock_t* lock) 
-{
+glk_mcs_lock_trylock(glk_mcs_lock_t* lock) // MCS 锁的非阻塞尝试加锁操作,glk_mcs_lock_t* lock表示当前线程要尝试加锁的锁结构。
+{ //trylock 会立即返回而不会阻塞线程。如果锁是空闲的，trylock 成功并获取锁；如果锁已经被其他线程持有，则 trylock 直接返回失败。
   if (lock->next != NULL)
     {
       return 1;
-    }
+    }//检查锁是否已经被其他线程持有
 
   volatile glk_mcs_lock_t* local = glk_mcs_get_local_lock(lock);
-  local->next = NULL;
+  //这个函数返回当前线程的局部锁节点，表示线程在锁队列中的位置。
+  local->next = NULL;//将局部锁节点的 next 字段初始化为 NULL，表示当前节点还没有后继节点。
   if (__sync_val_compare_and_swap(&lock->next, NULL, local) != NULL)
     {
-      glk_mcs_get_local_unlock(lock);
+      glk_mcs_get_local_unlock(lock);//在加锁失败的情况下，调用 glk_mcs_get_local_unlock 函数，将当前线程的局部锁节点释放或重置，以便后续操作可以重新使用。
       return 1;
     }
   return 0;
 }
 
 inline int
-glk_mcs_lock_unlock(glk_mcs_lock_t* lock) 
+glk_mcs_lock_unlock(glk_mcs_lock_t* lock) //某个线程调度的
 {
-  volatile glk_mcs_lock_t* local = glk_mcs_get_local_unlock(lock);
+  volatile glk_mcs_lock_t* local = glk_mcs_get_local_unlock(lock);//获取当前线程对应的局部 MCS 锁节点
   volatile glk_mcs_lock_t* succ;
 
   if (!(succ = local->next)) /* I seem to have no succ. */
+  //如果 next 为 NULL，说明当前线程没有后继线程等待锁。
     { 
       /* try to fix global pointer */
       if (__sync_val_compare_and_swap(&lock->next, local, NULL) == local) 
+      //这是一个原子操作，用于将全局锁的 next 指针从当前线程的节点 local 重置为 NULL，表示锁空闲。如果其他线程没有在这个时间段内抢占锁，那么这个操作会成功。
 	{
 	  return 0;
 	}
@@ -681,7 +662,7 @@ glk_mcs_lock_unlock(glk_mcs_lock_t* lock)
 	} 
       while (!succ); // wait for successor
     }
-  succ->waiting = 0;
+  succ->waiting = 0;//当找到后继线程 succ 时，将它的 waiting 字段设置为 0，通知它可以停止等待并获取锁。
   return 0;
 
 }
@@ -689,24 +670,26 @@ glk_mcs_lock_unlock(glk_mcs_lock_t* lock)
 /* **************************************** */
 /* ticket */
 /* **************************************** */
-
+//锁的机制类似于排队，先来先服务。该实现通过自旋等待让线程等待自己的票号被服务。
 static inline int
-glk_ticket_lock_lock(glk_t* gl)
+glk_ticket_lock_lock(glk_t* gl)//加锁
 {
-  glk_ticket_lock_t* lock = &gl->ticket_lock;
-  const uint32_t ticket = __sync_add_and_fetch(&(lock->tail), 1);
+  glk_ticket_lock_t* lock = &gl->ticket_lock;//从传入的 glk_t 结构体中获取 ticket_lock 成员，它是具体的 Ticket Lock 对象
+  const uint32_t ticket = __sync_add_and_fetch(&(lock->tail), 1);//原子操作，用于安全地递增 tail。tail 表示锁队列的尾部，每次有线程请求锁时，tail 都会递增，这样每个线程都能获得唯一的票号。
   const int distance = ticket - lock->head;
+  //head 表示当前被服务的票号。如果 ticket 等于 head，说明当前线程正好是下一个被服务的，因此可以立即获得锁。
   if (likely(distance == 0))
     {
-      return ticket;
+      return ticket;//直接返回票号，表示加锁成功。
     }
 
-  if (GLK_MUST_UPDATE_QUEUE_LENGTH(ticket))
+  if (GLK_MUST_UPDATE_QUEUE_LENGTH(ticket))//按位与操作检查 ticket 是否满足 GLK_SAMPLE_LOCK_EVERY 的条件
     {
-      __sync_add_and_fetch(&gl->queue_total, distance);
+      __sync_add_and_fetch(&gl->queue_total, distance);//distance 的值会被加到 queue_total 上
     }
-  
+  //特别是在多线程锁竞争的场景中，可以有效地降低系统开销。
   size_t n_spins = 0;
+  //如果线程没有获得锁（distance != 0），它会进入一个自旋循环（busy-waiting），直到它的 ticket 对应的 head 被更新到它的票号。
   do
     {
       const int distance = ticket - lock->head;
@@ -715,26 +698,26 @@ glk_ticket_lock_lock(glk_t* gl)
 	  break;
 	}
 
-      if (unlikely((n_spins++ == 1024) && gls_is_multiprogramming()))
-	{
+      if (unlikely((n_spins++ == 1024) && gls_is_multiprogramming()))//可以去掉
+	{//自旋计数器，用于跟踪线程的自旋等待次数。如果线程自旋超过 1024 次，并且系统处于多程序状态（gls_is_multiprogramming() 返回 true），它会让出 CPU (pthread_yield()) 给其他线程，并重置自旋计数器。
 	  n_spins = 0;
-	  pthread_yield();
+	  pthread_yield();//让出 CPU (pthread_yield()) 给其他线程
 	}
-      PAUSE_IN();
+      PAUSE_IN();//减少 CPU 消耗
     }
   while (1);
-  return ticket;
+  return ticket;//返回值是票号（ticket），用于表示当前线程在队列中的位置。
 }
 
 static inline int
-glk_ticket_lock_unlock(glk_ticket_lock_t* lock) 
+glk_ticket_lock_unlock(glk_ticket_lock_t* lock) //解锁
 {
-  asm volatile("" ::: "memory");
+  asm volatile("" ::: "memory");//内存屏障
 #if defined(MEMCACHED)
   if (__builtin_expect((lock->tail >= lock->head), 1)) 
     {
 #endif
-      lock->head++;
+      lock->head++;//解锁操作，head加一
 #if defined(MEMCACHED)
     }
 #endif
@@ -742,19 +725,19 @@ glk_ticket_lock_unlock(glk_ticket_lock_t* lock)
 }
 
 static inline int
-glk_ticket_lock_trylock(glk_ticket_lock_t* lock) 
+glk_ticket_lock_trylock(glk_ticket_lock_t* lock) //尝试加锁操作
 {
-  uint32_t to = lock->tail;
-  if (lock->head - to == 1)
+  uint32_t to = lock->tail;//队列的尾部
+  if (lock->head - to == 1)//如果 head - tail == 1，表示锁处于空闲状态，锁没有被持有，也没有线程在排队等待获取锁。
     {
       return (__sync_val_compare_and_swap(&lock->tail, to, to + 1) != to);
+      //如果 tail 的当前值等于 to，则将 tail 更新为 to + 1，表示成功获取锁；如果 tail 的当前值不等于 to，说明在此期间有其他线程修改了 tail，加锁失败。
     }
-
   return 1;
 }
 
 static inline int
-glk_ticket_lock_init(glk_ticket_lock_t* the_lock, const pthread_mutexattr_t* a) 
+glk_ticket_lock_init(glk_ticket_lock_t* the_lock, const pthread_mutexattr_t* a) //锁的初始化
 {
   the_lock->head=1;
   the_lock->tail=0;
@@ -763,7 +746,7 @@ glk_ticket_lock_init(glk_ticket_lock_t* the_lock, const pthread_mutexattr_t* a)
 
 
 int
-glk_is_free(glk_t* lock)
+glk_is_free(glk_t* lock)//用于判断锁是否处于空闲状态（即没有线程持有锁或正在排队)
 {
   do
     {
@@ -807,7 +790,7 @@ sys_futex_glk_mutex(void* addr1, int op, int val1, struct timespec* timeout, voi
 {
   return syscall(SYS_futex, addr1, op, val1, timeout, addr2, val3);
 }
-
+//这是一个用于调用 futex 系统调用的函数。futex（Fast Userspace Mutex）是 Linux 提供的一种用户态锁定机制，允许用户进程在用户空间进行同步。futex 既可以进行忙等（用户态自旋），也可以在需要时阻塞（进入内核等待）。
 //Swap uint32_t
 static inline uint32_t
 glk_mutex_swap_uint32(volatile uint32_t* target,  uint32_t x)
@@ -831,19 +814,19 @@ glk_mutex_swap_uint8(volatile uint8_t* target,  uint8_t x)
 
   return x;
 }
-
+//这两个函数分别实现了对 uint32_t 和 uint8_t 类型的原子交换操作，底层使用了 xchg 汇编指令。
 #define cmpxchg(a, b, c) __sync_val_compare_and_swap(a, b, c)
 #define xchg_32(a, b)    glk_mutex_swap_uint32((uint32_t*) a, b)
 #define xchg_8(a, b)     glk_mutex_swap_uint8((uint8_t*) a, b)
 
 static inline int
-glk_mutex_lock(glk_mutex_lock_t* m)
+glk_mutex_lock(glk_mutex_lock_t* m)//实现互斥锁的加锁操作，主要分为三步
 {
   if (!xchg_8(&m->l.b.locked, 1))
     {
       return 0;
     }
-
+//首先使用 xchg_8 尝试将 locked 字段设置为 1，如果成功则表示当前线程获取了锁，直接返回。
   const unsigned int time_spin = GLK_MUTEX_SPIN_TRIES_LOCK;
   GLK_MUTEX_FOR_N_CYCLES(time_spin,
 			     if (!xchg_8(&m->l.b.locked, 1))
@@ -853,11 +836,12 @@ glk_mutex_lock(glk_mutex_lock_t* m)
 			     PAUSE_IN();
 			     );
 
-
+//如果初次加锁失败（锁已被占用），线程会进入一个自旋循环，在短时间内反复尝试获取锁。
   /* Have to sleep */
-  while (xchg_32(&m->l.u, 257) & 1)
+  while (xchg_32(&m->l.u, 257) & 1)//尝试将锁的状态设置为 257，表示当前线程进入了等待状态。
+  //如果锁仍然被占用（m->l.u & 1 为 1），线程会调用 futex 系统调用进入等待。
     {
-      sys_futex_glk_mutex(m, FUTEX_WAIT_PRIVATE, 257, NULL, NULL, 0);
+      sys_futex_glk_mutex(m, FUTEX_WAIT_PRIVATE, 257, NULL, NULL, 0);//用于让线程进入阻塞状态，等待锁的状态发生变化。
     }
   return 0;
 
@@ -871,20 +855,21 @@ glk_mutex_unlock(glk_mutex_lock_t* m)
     {
       return 0;
     }
+  // /首先检查 u 是否等于 1，如果是并且可以使用 cmpxchg 成功将其置为 0，表示当前锁已被成功释放，直接返回。
 
   /* Unlock */
   m->l.b.locked = 0;
   asm volatile ("mfence");
-
+  //将 locked 字段设置为 0，并使用内存屏障 mfence 确保所有先前的内存操作完成后再执行接下来的代码。
   if (m->l.b.locked)
     {
       return 0;
     }
-
+  //如果 locked 仍然为 1，说明有其他线程在尝试获取锁或竞争锁，因此直接返回 0，表示锁已经被解锁，程序可以继续执行，无需唤醒其他线程。
   /* We need to wake someone up */
   m->l.b.contended = 0;
 
-  sys_futex_glk_mutex(m, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
+  sys_futex_glk_mutex(m, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);//用于唤醒等待在某个 futex 上的线程
   return 0;
 }
 
@@ -896,7 +881,8 @@ glk_mutex_lock_trylock(glk_mutex_lock_t* m)
     {
       return 0;
     }
-  return EBUSY;
+  //使用 xchg_8 检查并设置 locked 字段。如果 locked 为 0，表示锁是空闲的，成功加锁并返回 0。
+  return EBUSY;//如果锁已经被其他线程持有，返回 EBUSY 表示锁忙
 }
 
 static inline int
@@ -905,7 +891,7 @@ glk_mutex_init(glk_mutex_lock_t* m)
   m->l.u = 0;
   return 0;
 }
-
+//初始化互斥锁，将锁的状态设置为未锁定（u = 0）。这在锁创建时被调用，以确保锁的初始状态为未占用。
 
 /* **************************************** */
 /* conditionals */

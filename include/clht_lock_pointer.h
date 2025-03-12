@@ -1,35 +1,5 @@
 /*   
  * File: clht_lock_pointer.h
- * Authors: Jelena Antic <jelena.antic@epfl.ch>
- *          Georgios Chatzopoulos <georgios.chatzopoulos@epfl.ch>
- *          Vasileios Trigonakis <vasileios.trigonakis@epfl.ch>
- *
- * Description: 
- *      CLHT optimized for GLS - value type is a pointer to a lock, key type is
- *      a memory address.
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2016 Jelena Antic, Georgios Chatzopoulos, Vasileios Trigonakis
- *               Distributed Programming Lab (LPD), EPFL
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
  */
 
 #ifndef _CLHT_LOCK_POINTER_H_
@@ -139,7 +109,7 @@ static inline uint32_t pow2roundup (uint32_t x){
 #define CLHT_PUT_TTAS     2
 #define CLHT_PUT_TICKET   3
 #define CLHT_PUT_MCS      4
-#define CLHT_PUT_MUTEX    5
+#define CLHT_PUT_MUTEX    5//互斥
 #define CLHT_PUT_TAS      6
 
 #ifndef ALIGNED

@@ -493,7 +493,7 @@ bucket_exists_in(bucket_t* bucket, clht_lp_addr_t key)
 
   /* Retrieve a key-value entry from a hash table. */
 inline clht_lp_val_t
-clht_lp_get(clht_lp_hashtable_t* hashtable, clht_lp_addr_t key)
+clht_lp_get(clht_lp_hashtable_t* hashtable, clht_lp_addr_t key)//从哈希表中获取锁
 {
   size_t bin = clht_lp_hash(hashtable, key);
   bucket_t* bucket = hashtable->table + bin;

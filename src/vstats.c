@@ -1,6 +1,8 @@
 #include "cdf.h"
 #include "math.h"
 
+//数据处理
+
 #define DBL_LARGE 1e9
 
 static int

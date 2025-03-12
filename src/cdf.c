@@ -26,6 +26,9 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+//这段代码实现了累积分布函数 (CDF) 的计算、打印、以及相关的统计分析。CDF 是一种用于描述数据集分布的统计方法，它显示了数据集中的每个值小于或等于某个阈值的概率。
+
+
 #include "cdf.h"
 #include <math.h>
 

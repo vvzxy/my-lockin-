@@ -9,6 +9,8 @@
 #include <math.h>
 #include <string.h>
 
+//主要用于通过 RAPL（Running Average Power Limit）接口读取并监控 CPU 能耗信息。具体功能是通过命令行参数指定监控时间，并在运行时采集能耗数据。以下是详细说明：
+
 #define XEON2
 
 #include "platform_defs.h"

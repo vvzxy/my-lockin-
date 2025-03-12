@@ -1,5 +1,7 @@
 #include "dvfs_set.h"
 
+//这段代码实现了动态电压和频率缩放（DVFS，Dynamic Voltage and Frequency Scaling）设置的功能，特别是用于控制 CPU 的频率设置。该代码通过访问 Linux 系统中的 /sys/devices/system/cpu/cpuN/cpufreq/scaling_setspeed 文件来调整 CPU 频率。
+
 __thread int dvfs_cid;
 __thread int dvfs_sys_fd = -1;
 

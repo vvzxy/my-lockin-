@@ -28,6 +28,9 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+
+//基于CLH锁的锁机制。CLH锁（Craig, Landin, and Hagersten Lock）是一种常见的自旋锁（spinlock）算法，具有队列式的行为，使线程在等待时自旋，直到它们的前驱释放锁，从而避免忙等。该实现针对GLS（某种分布式系统或锁管理框架）进行了优化。
+
 #include "clh_glk_impl.h"
 
 #if defined(PAUSE_IN)
